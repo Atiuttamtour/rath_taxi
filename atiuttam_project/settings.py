@@ -26,12 +26,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
-    # Third Party
     'corsheaders',      # <--- Needed for App connection
     'rest_framework',   # <--- Needed for API
-    
-    # Your App
     'rath_api', 
 ]
 

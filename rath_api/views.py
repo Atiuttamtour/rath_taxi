@@ -6,7 +6,8 @@ import json
 import math
 
 # --- NEW IMPORTS FOR API (The Bridge) ---
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 # ==========================================
@@ -15,12 +16,13 @@ from rest_framework.response import Response
 
 @csrf_exempt
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def check_phone(request):
     """Checks if phone exists to decide between Login or Signup"""
     phone = request.data.get('phone')
     try:
-        # Try to find user by phone
-        user = User.objects.get(phone=phone)
+        # FIX 1: Changed 'phone=' to 'phone_number='
+        user = User.objects.get(phone_number=phone)
         return Response({
             "exists": True, 
             "role": user.user_type, 
@@ -32,12 +34,14 @@ def check_phone(request):
 
 @csrf_exempt
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def signup_customer(request):
     """Registers a new Passenger"""
     data = request.data
     try:
         user = User.objects.create(
-            phone=data['phone'],
+            # FIX 2: Changed 'phone=' to 'phone_number='
+            phone_number=data['phone'],
             name=data['name'],
             email=data.get('email', ''),
             user_type='customer'
@@ -48,12 +52,14 @@ def signup_customer(request):
 
 @csrf_exempt
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def signup_driver(request):
     """Registers a new Driver"""
     data = request.data
     try:
         user = User.objects.create(
-            phone=data['phone'],
+            # FIX 3: Changed 'phone=' to 'phone_number='
+            phone_number=data['phone'],
             name=data['fullName'],
             user_type='driver',
             license_number=data.get('vehicleNumber', ''),
@@ -96,8 +102,8 @@ def create_trip(request):
     if request.method == 'POST':
         data = json.loads(request.body)
         try:
-            # Updated to match our new User model structure
-            driver_user = User.objects.get(phone=data['driver_phone'])
+            # FIX 4: Changed 'phone=' to 'phone_number='
+            driver_user = User.objects.get(phone_number=data['driver_phone'])
             # Check if driver is verified before letting them post
             if not driver_user.is_verified:
                  return JsonResponse({'error': 'Driver not verified yet'}, status=403)

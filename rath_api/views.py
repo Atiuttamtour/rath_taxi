@@ -11,23 +11,28 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 # ==========================================
-# 1. AUTHENTICATION & USER MANAGEMENT
+# 1. AUTHENTICATION & USER MANAGEMENT (SECURE)
 # ==========================================
 
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def check_phone(request):
-    """Checks if phone exists to decide between Login or Signup"""
+    """
+    SECURITY CHECK:
+    - Checks if user exists.
+    - Returns 'is_verified' status so App knows to block unapproved drivers.
+    """
     phone = request.data.get('phone')
     try:
         user = User.objects.get(phone_number=phone)
         return Response({
             "exists": True, 
             "role": user.role, 
-            # FIX 1: Changed 'user.name' to 'user.first_name'
             "name": user.first_name,
-            "user_id": user.id
+            "user_id": user.id,
+            # SECURITY: This tells the app if the Admin has approved them
+            "is_verified": user.is_verified 
         })
     except User.DoesNotExist:
         return Response({"exists": False})
@@ -36,15 +41,15 @@ def check_phone(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def signup_customer(request):
-    """Registers a new Passenger"""
+    """Registers a new Passenger (Auto-Verified)"""
     data = request.data
     try:
         user = User.objects.create(
             phone_number=data['phone'],
-            # FIX 2: Changed 'name=' to 'first_name='
             first_name=data['name'],
             email=data.get('email', ''),
-            role='customer'
+            role='customer',
+            is_verified=True # Customers don't need manual approval
         )
         return Response({"status": "success", "user_id": user.id, "role": "customer"})
     except Exception as e:
@@ -54,16 +59,15 @@ def signup_customer(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def signup_driver(request):
-    """Registers a new Driver"""
+    """Registers a new Driver (REQUIRES APPROVAL)"""
     data = request.data
     try:
         user = User.objects.create(
             phone_number=data['phone'],
-            # FIX 3: Changed 'name=' to 'first_name='
             first_name=data['fullName'],
             role='driver',
             license_number=data.get('vehicleNumber', ''),
-            is_verified=False 
+            is_verified=False # SECURITY: Drivers must wait for Admin Approval
         )
         return Response({"status": "success", "user_id": user.id, "role": "driver"})
     except Exception as e:
@@ -99,12 +103,20 @@ def is_on_the_way(trip_source, trip_dest, customer_pickup, customer_drop):
 
 @csrf_exempt
 def create_trip(request):
+    """
+    SECURITY ENFORCEMENT:
+    - Only allows VERIFIED drivers to post trips.
+    """
     if request.method == 'POST':
         data = json.loads(request.body)
         try:
             driver_user = User.objects.get(phone_number=data['driver_phone'])
+            
+            # SECURITY BLOCK: If Admin hasn't approved, reject request.
             if not driver_user.is_verified:
-                 return JsonResponse({'error': 'Driver not verified yet'}, status=403)
+                 return JsonResponse({
+                     'error': 'Account Under Review. Please wait for Admin approval.'
+                 }, status=403)
                  
         except User.DoesNotExist:
             return JsonResponse({'error': 'Driver not found'}, status=404)
@@ -141,7 +153,6 @@ def search_trips(request):
         
         if is_on_the_way(driver_source, driver_dest, customer_loc, driver_dest):
             results.append({
-                # FIX 4: Changed 'name' to 'first_name'
                 'driver_name': trip.driver.first_name,
                 'vehicle': trip.driver.license_number, 
                 'price': trip.price_per_seat,
@@ -200,7 +211,6 @@ def get_trip_bookings(request):
         data = []
         for b in bookings:
             data.append({
-                # FIX 5: Changed 'name' to 'first_name'
                 'customer': b.customer.first_name,
                 'seats': b.seats_booked,
                 'revenue': b.total_cost,

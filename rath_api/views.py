@@ -21,13 +21,12 @@ def check_phone(request):
     """Checks if phone exists to decide between Login or Signup"""
     phone = request.data.get('phone')
     try:
-        # Field 1: phone_number (Correct)
         user = User.objects.get(phone_number=phone)
         return Response({
             "exists": True, 
-            # FIX 1: Changed 'user_type' to 'role'
             "role": user.role, 
-            "name": user.name,
+            # FIX 1: Changed 'user.name' to 'user.first_name'
+            "name": user.first_name,
             "user_id": user.id
         })
     except User.DoesNotExist:
@@ -42,9 +41,9 @@ def signup_customer(request):
     try:
         user = User.objects.create(
             phone_number=data['phone'],
-            name=data['name'],
+            # FIX 2: Changed 'name=' to 'first_name='
+            first_name=data['name'],
             email=data.get('email', ''),
-            # FIX 2: Changed 'user_type' to 'role'
             role='customer'
         )
         return Response({"status": "success", "user_id": user.id, "role": "customer"})
@@ -60,8 +59,8 @@ def signup_driver(request):
     try:
         user = User.objects.create(
             phone_number=data['phone'],
-            name=data['fullName'],
-            # FIX 3: Changed 'user_type' to 'role'
+            # FIX 3: Changed 'name=' to 'first_name='
+            first_name=data['fullName'],
             role='driver',
             license_number=data.get('vehicleNumber', ''),
             is_verified=False 
@@ -142,7 +141,8 @@ def search_trips(request):
         
         if is_on_the_way(driver_source, driver_dest, customer_loc, driver_dest):
             results.append({
-                'driver_name': trip.driver.name,
+                # FIX 4: Changed 'name' to 'first_name'
+                'driver_name': trip.driver.first_name,
                 'vehicle': trip.driver.license_number, 
                 'price': trip.price_per_seat,
                 'source': trip.source_city,
@@ -200,7 +200,8 @@ def get_trip_bookings(request):
         data = []
         for b in bookings:
             data.append({
-                'customer': b.customer.name,
+                # FIX 5: Changed 'name' to 'first_name'
+                'customer': b.customer.first_name,
                 'seats': b.seats_booked,
                 'revenue': b.total_cost,
                 'status': b.status

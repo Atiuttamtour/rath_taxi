@@ -17,10 +17,15 @@ class User(AbstractUser):
         (IS_AGENT, 'Agent'),
     ]
     
-    # We add these fields to the default Django User
+    # Standard Fields
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default=IS_CUSTOMER)
     phone_number = models.CharField(max_length=15, unique=True)
     profile_photo = models.ImageField(upload_to='profiles/', null=True, blank=True)
+
+    # --- FIX: ADDED SECURITY FIELDS DIRECTLY TO USER ---
+    # This fixes "AttributeError: User object has no attribute is_verified"
+    is_verified = models.BooleanField(default=False) 
+    license_number = models.CharField(max_length=50, null=True, blank=True)
 
     # Fix for Django's default related_name conflict
     groups = models.ManyToManyField(
@@ -43,20 +48,17 @@ class User(AbstractUser):
 
 
 # ==========================================
-# 2. DRIVER PROFILE
-# Stores the "Heavy" business logic separate from Login
+# 2. DRIVER PROFILE (OPTIONAL/ADVANCED)
+# We keep this for extra data (Bank details, etc.)
 # ==========================================
 class DriverProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='driver_profile')
     
-    # Verification Details
-    license_number = models.CharField(max_length=50)
-    vehicle_number = models.CharField(max_length=50)
-    aadhaar_number = models.CharField(max_length=50, null=True, blank=True) # <-- INCREMENT ADDED
+    # Additional Details
+    vehicle_number = models.CharField(max_length=50, null=True, blank=True)
+    aadhaar_number = models.CharField(max_length=50, null=True, blank=True)
     
-    is_verified = models.BooleanField(default=False) # Admin must approve
-    
-    # The Wallet Logic (For 24-hour Commission Rule)
+    # Wallet Logic
     wallet_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00) 
     pending_dues = models.DecimalField(max_digits=10, decimal_places=2, default=0.00) 
     last_due_date = models.DateTimeField(null=True, blank=True)
@@ -72,12 +74,14 @@ class DriverProfile(models.Model):
 # The Core "Empty Leg" Feature
 # ==========================================
 class Trip(models.Model):
-    driver = models.ForeignKey(DriverProfile, on_delete=models.CASCADE, related_name='trips')
+    # --- FIX: LINKED DIRECTLY TO USER ---
+    # This prevents errors when creating trips in views.py
+    driver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trips')
     
     source_city = models.CharField(max_length=100) 
     destination_city = models.CharField(max_length=100)
     
-    # Coordinates for "Rubber Band" Math
+    # Coordinates
     source_lat = models.FloatField()
     source_lng = models.FloatField()
     dest_lat = models.FloatField()
@@ -90,7 +94,7 @@ class Trip(models.Model):
     price_per_seat = models.DecimalField(max_digits=10, decimal_places=2)
     is_full_car_booking = models.BooleanField(default=False)
     
-    status = models.CharField(max_length=20, default='SCHEDULED') # SCHEDULED, STARTED, COMPLETED
+    status = models.CharField(max_length=20, default='SCHEDULED') 
 
     def __str__(self):
         return f"{self.source_city} -> {self.destination_city} ({self.status})"

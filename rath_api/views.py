@@ -1,4 +1,3 @@
-# FIX: Updated phone field name
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
@@ -6,13 +5,13 @@ from .models import Trip, User, Booking
 import json
 import math
 
-# --- NEW IMPORTS FOR API (The Bridge) ---
+# --- IMPORTS FOR API ---
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 # ==========================================
-# 1. AUTHENTICATION & USER MANAGEMENT (NEW)
+# 1. AUTHENTICATION & USER MANAGEMENT
 # ==========================================
 
 @csrf_exempt
@@ -22,11 +21,12 @@ def check_phone(request):
     """Checks if phone exists to decide between Login or Signup"""
     phone = request.data.get('phone')
     try:
-        # FIX 1: Changed 'phone=' to 'phone_number='
+        # Field 1: phone_number (Correct)
         user = User.objects.get(phone_number=phone)
         return Response({
             "exists": True, 
-            "role": user.user_type, 
+            # FIX 1: Changed 'user_type' to 'role'
+            "role": user.role, 
             "name": user.name,
             "user_id": user.id
         })
@@ -41,11 +41,11 @@ def signup_customer(request):
     data = request.data
     try:
         user = User.objects.create(
-            # FIX 2: Changed 'phone=' to 'phone_number='
             phone_number=data['phone'],
             name=data['name'],
             email=data.get('email', ''),
-            user_type='customer'
+            # FIX 2: Changed 'user_type' to 'role'
+            role='customer'
         )
         return Response({"status": "success", "user_id": user.id, "role": "customer"})
     except Exception as e:
@@ -59,12 +59,12 @@ def signup_driver(request):
     data = request.data
     try:
         user = User.objects.create(
-            # FIX 3: Changed 'phone=' to 'phone_number='
             phone_number=data['phone'],
             name=data['fullName'],
-            user_type='driver',
+            # FIX 3: Changed 'user_type' to 'role'
+            role='driver',
             license_number=data.get('vehicleNumber', ''),
-            is_verified=False  # Pending Approval
+            is_verified=False 
         )
         return Response({"status": "success", "user_id": user.id, "role": "driver"})
     except Exception as e:
@@ -103,9 +103,7 @@ def create_trip(request):
     if request.method == 'POST':
         data = json.loads(request.body)
         try:
-            # FIX 4: Changed 'phone=' to 'phone_number='
             driver_user = User.objects.get(phone_number=data['driver_phone'])
-            # Check if driver is verified before letting them post
             if not driver_user.is_verified:
                  return JsonResponse({'error': 'Driver not verified yet'}, status=403)
                  
@@ -113,7 +111,7 @@ def create_trip(request):
             return JsonResponse({'error': 'Driver not found'}, status=404)
 
         new_trip = Trip.objects.create(
-            driver=driver_user, # Linked to the User directly
+            driver=driver_user, 
             source_city=data['source_city'],
             destination_city=data['destination_city'],
             source_lat=data['source_lat'],
@@ -142,11 +140,10 @@ def search_trips(request):
         driver_dest = {'lat': trip.dest_lat, 'lng': trip.dest_lng}
         customer_loc = {'lat': pickup_lat, 'lng': pickup_lng}
         
-        # Check if the driver is passing by
         if is_on_the_way(driver_source, driver_dest, customer_loc, driver_dest):
             results.append({
                 'driver_name': trip.driver.name,
-                'vehicle': trip.driver.license_number, # Using license/vehicle field
+                'vehicle': trip.driver.license_number, 
                 'price': trip.price_per_seat,
                 'source': trip.source_city,
                 'destination': trip.destination_city,
@@ -166,7 +163,6 @@ def book_seat(request):
         
         try:
             trip = Trip.objects.get(id=data['trip_id'])
-            # Find customer by ID or Phone
             customer = User.objects.get(id=data.get('user_id')) 
         except (Trip.DoesNotExist, User.DoesNotExist):
             return JsonResponse({'error': 'Trip or Customer not found'}, status=404)

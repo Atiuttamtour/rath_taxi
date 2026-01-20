@@ -1,36 +1,33 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, DriverProfile, Trip, Booking  # <--- Added Booking
+from .models import User, Trip, Booking, PhoneOTP
 
-# 1. User Admin (Login accounts)
+# This tells Django how to display your Custom User
 class CustomUserAdmin(UserAdmin):
-    list_display = ('username', 'email', 'phone_number', 'role', 'is_staff')
-    fieldsets = UserAdmin.fieldsets + (
-        ('Extra Details', {'fields': ('phone_number', 'role', 'profile_photo')}),
-    )
-    add_fieldsets = UserAdmin.add_fieldsets + (
-        (None, {'fields': ('email', 'phone_number', 'role')}),
-    )
-
-# 2. Trip Admin (To see routes clearly)
-class TripAdmin(admin.ModelAdmin):
-    list_display = ('id', 'driver_name', 'source_city', 'destination_city', 'price_per_seat', 'available_seats', 'status')
+    model = User
     
-    def driver_name(self, obj):
-        return obj.driver.user.username
+    # 1. CONTROL WHICH COLUMNS APPEAR IN THE LIST
+    list_display = ['phone_number', 'username', 'role', 'is_verified', 'date_joined']
+    
+    # 2. CONTROL WHICH FIELDS APPEAR WHEN YOU CLICK A USER
+    # We are adding a new section called "Driver Documents & Info"
+    fieldsets = UserAdmin.fieldsets + (
+        ('Driver Details', {
+            'fields': (
+                'role', 
+                'is_verified', 
+                'license_number', 
+                'vehicle_number', 
+                'vehicle_type',
+                # Add your exact image field names here if they are different:
+                # 'license_image', 
+                # 'vehicle_image',
+            )
+        }),
+    )
 
-# 3. Booking Admin (To see Tickets)
-class BookingAdmin(admin.ModelAdmin):
-    list_display = ('id', 'trip_info', 'customer_name', 'seats_booked', 'total_cost', 'status')
-
-    def trip_info(self, obj):
-        return f"{obj.trip.source_city} -> {obj.trip.destination_city}"
-
-    def customer_name(self, obj):
-        return obj.customer.username
-
-# Register everything
+# Register the models
 admin.site.register(User, CustomUserAdmin)
-admin.site.register(DriverProfile)
-admin.site.register(Trip, TripAdmin)
-admin.site.register(Booking, BookingAdmin) # <--- NOW YOU CAN SEE IT!
+admin.site.register(Trip)
+admin.site.register(Booking)
+admin.site.register(PhoneOTP)

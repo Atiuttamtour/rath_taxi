@@ -7,25 +7,28 @@ from django.utils import timezone
 # Handles Login for both Drivers & Customers
 # ==========================================
 class User(AbstractUser):
-    IS_DRIVER = 'DRIVER'
-    IS_CUSTOMER = 'CUSTOMER'
-    IS_AGENT = 'AGENT'
-    
+    # Role choices
+    CUSTOMER = 'CUSTOMER'
+    DRIVER = 'DRIVER'
+    AGENT = 'AGENT'
     ROLE_CHOICES = [
-        (IS_DRIVER, 'Driver'),
-        (IS_CUSTOMER, 'Customer'),
-        (IS_AGENT, 'Agent'),
+        (CUSTOMER, 'Customer'),
+        (DRIVER, 'Driver'),
+        (AGENT, 'Agent'),
     ]
     
-    # Standard Fields
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default=IS_CUSTOMER)
+    # Basic Info
     phone_number = models.CharField(max_length=15, unique=True)
-    profile_photo = models.ImageField(upload_to='profiles/', null=True, blank=True)
-
-    # --- FIX: ADDED SECURITY FIELDS DIRECTLY TO USER ---
-    # This fixes "AttributeError: User object has no attribute is_verified"
-    is_verified = models.BooleanField(default=False) 
-    license_number = models.CharField(max_length=50, null=True, blank=True)
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default=CUSTOMER)
+    
+    # --- SECURITY & VERIFICATION ---
+    is_verified = models.BooleanField(default=False)
+    
+    # --- DRIVER SPECIFIC FIELDS ---
+    # Kept all your requested fields without duplicates
+    license_number = models.CharField(max_length=50, blank=True, null=True)
+    vehicle_number = models.CharField(max_length=20, blank=True, null=True)
+    vehicle_type = models.CharField(max_length=20, blank=True, null=True)
 
     # Fix for Django's default related_name conflict
     groups = models.ManyToManyField(
@@ -74,8 +77,7 @@ class DriverProfile(models.Model):
 # The Core "Empty Leg" Feature
 # ==========================================
 class Trip(models.Model):
-    # --- FIX: LINKED DIRECTLY TO USER ---
-    # This prevents errors when creating trips in views.py
+    # --- LINKED DIRECTLY TO USER ---
     driver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trips')
     
     source_city = models.CharField(max_length=100) 
@@ -120,3 +122,16 @@ class Booking(models.Model):
 
     def __str__(self):
         return f"Ticket #{self.id} - {self.customer.username}"
+
+
+# ==========================================
+# 5. SECURITY (OTP STORAGE)
+# ==========================================
+class PhoneOTP(models.Model):
+    phone_number = models.CharField(max_length=15, unique=True)
+    otp_code = models.CharField(max_length=6)
+    count = models.IntegerField(default=0) # To prevent spamming
+    created_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.phone_number} - {self.otp_code}"

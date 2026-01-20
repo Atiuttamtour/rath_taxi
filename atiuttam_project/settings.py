@@ -1,39 +1,50 @@
 """
 Django settings for atiuttam_project project.
+Production Ready: Jazzmin Theme, India Timezone, WhiteNoise, & Cloud Database.
 """
 
 from pathlib import Path
+import dj_database_url
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
 # Quick-start development settings - unsuitable for production
-SECRET_KEY = 'django-insecure-2%=zjp!5=+gokc30lsbo&725jzr5xb6i5_d89e^l=m2*nm@9_!'
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-2%=zjp!5=+gokc30lsbo&725jzr5xb6i5_d89e^l=m2*nm@9_!')
 
-DEBUG = True
+# SECURITY WARNING: don't run with debug turned on in production!
+# If 'RENDER' is in the environment, Debug is False (Secure). Otherwise True (Laptop).
+DEBUG = 'RENDER' not in os.environ
 
-# --- CRITICAL FIX: ALLOW NETWORK TRAFFIC ---
-ALLOWED_HOSTS = ['*']  
+# --- ALLOWED HOSTS CONFIGURATION ---
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS = [RENDER_EXTERNAL_HOSTNAME]
+else:
+    ALLOWED_HOSTS = ['*']
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'jazzmin',                      # <--- 1. PROFESSIONAL THEME (Must be at top)
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'corsheaders',      # <--- Needed for App connection
-    'rest_framework',   # <--- Needed for API
-    'rath_api', 
+    'corsheaders',                  # <--- Needed for App connection
+    'rest_framework',               # <--- Needed for API
+    'rath_api',                     # <--- YOUR MAIN APP
 ]
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',        # <--- MUST BE FIRST
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',   # <--- 2. FIX ADMIN PANEL CSS IN CLOUD
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -62,12 +73,13 @@ TEMPLATES = [
 WSGI_APPLICATION = 'atiuttam_project.wsgi.application'
 
 
-# Database
+# --- 3. DATABASE CONFIGURATION (SMART SWITCH) ---
+# If on Render (Cloud), use PostgreSQL. If on Laptop, use SQLite.
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        conn_max_age=600
+    )
 }
 
 
@@ -82,17 +94,30 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Kolkata'  # India Time
 USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = 'static/'
+# --- 4. STATIC FILES (CSS/Images) ---
+STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+# This compresses CSS so it loads fast and works on Render
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # TELLING DJANGO TO USE OUR CUSTOM USER
 AUTH_USER_MODEL = 'rath_api.User'
 
 # ALLOW ALL BROWSERS TO TALK TO US
 CORS_ALLOW_ALL_ORIGINS = True
+
+# --- 5. PROFESSIONAL BRANDING SETTINGS ---
+JAZZMIN_SETTINGS = {
+    "site_title": "Atiuttam Rath Admin",
+    "site_header": "Atiuttam Rath",
+    "site_brand": "Atiuttam Rath",
+    "welcome_sign": "Welcome to Atiuttam Rath HQ",
+    "copyright": "Atiuttam Rath Ltd",
+    "search_model": "rath_api.User",
+    "show_ui_builder": False,
+}

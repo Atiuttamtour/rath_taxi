@@ -25,7 +25,9 @@ class User(AbstractUser):
     is_verified = models.BooleanField(default=False)
     
     # --- DRIVER SPECIFIC FIELDS ---
-    # Kept all your requested fields without duplicates
+    # 🚀 INCREMENT: Added 'address' because views.py tries to save it
+    address = models.TextField(blank=True, null=True) 
+    
     license_number = models.CharField(max_length=50, blank=True, null=True)
     vehicle_number = models.CharField(max_length=20, blank=True, null=True)
     vehicle_type = models.CharField(max_length=20, blank=True, null=True)

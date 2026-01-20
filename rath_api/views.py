@@ -133,29 +133,50 @@ def signup_customer(request):
 @permission_classes([AllowAny])
 def signup_driver(request):
     """
-    SMART SIGNUP: 
+    SMART SIGNUP (INCREMENTED): 
     - Handles New Drivers.
     - Handles Customers UPGRADING to Drivers.
+    - 🚀 NOW SAVES: Email, Address, Vehicle Number, and Type.
     """
     data = request.data
     try:
-        # Try to find existing user (e.g. Customer) or Create New
+        # 1. Capture ALL new fields from frontend
+        phone = data.get('phone')
+        full_name = data.get('fullName')
+        email = data.get('email', '')
+        address = data.get('address', '')
+        # Handle both keys just in case frontend sends 'vehicleNumber' or 'vehicle_number'
+        vehicle_number = data.get('vehicle_number') or data.get('vehicleNumber', '') 
+        vehicle_type = data.get('vehicle_type', 'Sedan') 
+
+        # 2. Try to find existing user or Create New
         user, created = User.objects.get_or_create(
-            phone_number=data['phone'],
+            phone_number=phone,
             defaults={
-                'first_name': data['fullName'],
+                'first_name': full_name,
+                'email': email,
                 'role': 'driver',
-                'license_number': data.get('vehicleNumber', ''),
-                'is_verified': False
+                'is_verified': False,
+                # Save Driver Specifics
+                'vehicle_number': vehicle_number,
+                'vehicle_type': vehicle_type,
+                'address': address
             }
         )
 
+        # 3. If user ALREADY existed (e.g. was a Customer), UPGRADE them
         if not created:
-            # If user already existed (as Customer), UPGRADE them now
             user.role = 'driver'
-            user.first_name = data['fullName'] # Update name
-            user.license_number = data.get('vehicleNumber', '')
-            user.is_verified = False # Reset verification for security
+            user.first_name = full_name
+            if email: user.email = email
+            
+            # Update Driver Details
+            user.vehicle_number = vehicle_number
+            user.vehicle_type = vehicle_type
+            user.address = address
+            
+            # Reset verification for security (since they changed details)
+            user.is_verified = False 
             user.save()
 
         return Response({"status": "success", "user_id": user.id, "role": "driver"})
@@ -175,7 +196,8 @@ def get_profile(request):
             "email": user.email,
             "phone": user.phone_number,
             "role": user.role,
-            "vehicle_number": user.license_number if user.role == 'driver' else ""
+            # Return vehicle info if it exists
+            "vehicle_number": user.vehicle_number if hasattr(user, 'vehicle_number') else ""
         })
     except User.DoesNotExist:
         return JsonResponse({"status": "error", "message": "User not found"}, status=404)
@@ -346,7 +368,7 @@ def search_trips(request):
         if is_on_the_way(driver_source, driver_dest, customer_loc, driver_dest):
             results.append({
                 'driver_name': trip.driver.first_name,
-                'vehicle': trip.driver.license_number, 
+                'vehicle': trip.driver.vehicle_number if hasattr(trip.driver, 'vehicle_number') else trip.driver.license_number, 
                 'price': trip.price_per_seat,
                 'source': trip.source_city,
                 'destination': trip.destination_city,
@@ -407,7 +429,7 @@ def book_seat(request):
             'driver_details': {
                 'name': trip.driver.first_name,
                 'phone': trip.driver.phone_number,
-                'vehicle': trip.driver.license_number
+                'vehicle': trip.driver.vehicle_number if hasattr(trip.driver, 'vehicle_number') else ""
             }
         })
     except (Trip.DoesNotExist, User.DoesNotExist):

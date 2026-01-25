@@ -25,12 +25,17 @@ class User(AbstractUser):
     is_verified = models.BooleanField(default=False)
     
     # --- DRIVER SPECIFIC FIELDS ---
-    # 🚀 INCREMENT: Added 'address' because views.py tries to save it
     address = models.TextField(blank=True, null=True) 
     
     license_number = models.CharField(max_length=50, blank=True, null=True)
     vehicle_number = models.CharField(max_length=20, blank=True, null=True)
     vehicle_type = models.CharField(max_length=20, blank=True, null=True)
+
+    # 🚀 DOCUMENT STORAGE (IMAGES)
+    profile_photo = models.ImageField(upload_to='drivers/profile/', null=True, blank=True)
+    license_photo = models.ImageField(upload_to='drivers/license/', null=True, blank=True)
+    rc_photo = models.ImageField(upload_to='drivers/rc/', null=True, blank=True)
+    aadhaar_photo = models.ImageField(upload_to='drivers/aadhaar/', null=True, blank=True)
 
     # Fix for Django's default related_name conflict
     groups = models.ManyToManyField(
@@ -53,8 +58,7 @@ class User(AbstractUser):
 
 
 # ==========================================
-# 2. DRIVER PROFILE (OPTIONAL/ADVANCED)
-# We keep this for extra data (Bank details, etc.)
+# 2. DRIVER PROFILE (OPTIONAL)
 # ==========================================
 class DriverProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='driver_profile')
@@ -75,11 +79,10 @@ class DriverProfile(models.Model):
 
 
 # ==========================================
-# 3. THE TRIP
-# The Core "Empty Leg" Feature
+# 3. THE TRIP (Empty Leg)
 # ==========================================
 class Trip(models.Model):
-    # --- LINKED DIRECTLY TO USER ---
+    # If Driver account is deleted, delete their trips
     driver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trips')
     
     source_city = models.CharField(max_length=100) 
@@ -92,9 +95,11 @@ class Trip(models.Model):
     dest_lng = models.FloatField()
     
     start_time = models.DateTimeField()
+    
+    # 🚀 ZERO DECREMENT LOGIC:
+    # We keep 'available_seats' to show capacity, but we won't decrease it automatically.
     available_seats = models.IntegerField(default=3)
     
-    # Pricing & Status
     price_per_seat = models.DecimalField(max_digits=10, decimal_places=2)
     is_full_car_booking = models.BooleanField(default=False)
     
@@ -105,11 +110,15 @@ class Trip(models.Model):
 
 
 # ==========================================
-# 4. THE BOOKING
-# The Ticket Logic
+# 4. THE BOOKING (The Bridge)
 # ==========================================
 class Booking(models.Model):
+    # 🚀 CRITICAL FIX FOR DELETE BUTTON:
+    # on_delete=models.CASCADE ensures that if a Driver deletes a Trip,
+    # the associated Bookings/Passenger List are also deleted automatically.
+    # If this was PROTECT, the delete button would fail.
     trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='bookings')
+    
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='booked_trips')
     
     seats_booked = models.IntegerField(default=1)
@@ -132,7 +141,7 @@ class Booking(models.Model):
 class PhoneOTP(models.Model):
     phone_number = models.CharField(max_length=15, unique=True)
     otp_code = models.CharField(max_length=6)
-    count = models.IntegerField(default=0) # To prevent spamming
+    count = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

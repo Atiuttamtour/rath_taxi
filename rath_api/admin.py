@@ -6,22 +6,26 @@ from .models import User, Trip, Booking, PhoneOTP
 class CustomUserAdmin(UserAdmin):
     model = User
     
-    # 1. CONTROL WHICH COLUMNS APPEAR IN THE LIST
-    list_display = ['phone_number', 'username', 'role', 'is_verified', 'date_joined']
+    # 1. CONTROL WHICH COLUMNS APPEAR IN THE LIST (The Table View)
+    list_display = ['phone_number', 'username', 'role', 'is_verified', 'vehicle_number']
     
-    # 2. CONTROL WHICH FIELDS APPEAR WHEN YOU CLICK A USER
+    # 2. CONTROL WHICH FIELDS APPEAR WHEN YOU CLICK A USER (The Form View)
     # We are adding a new section called "Driver Documents & Info"
     fieldsets = UserAdmin.fieldsets + (
         ('Driver Details', {
             'fields': (
                 'role', 
                 'is_verified', 
+                'address',           # Added Address
                 'license_number', 
                 'vehicle_number', 
                 'vehicle_type',
-                # Add your exact image field names here if they are different:
-                # 'license_image', 
-                # 'vehicle_image',
+                
+                # 🚀 PROFESSIONAL FIX: IMAGES ARE NOW VISIBLE
+                'profile_photo', 
+                'license_photo',
+                'rc_photo',          # Added RC
+                'aadhaar_photo',     # Added Aadhaar
             )
         }),
     )

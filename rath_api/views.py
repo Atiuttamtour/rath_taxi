@@ -86,7 +86,7 @@ def send_otp_email(request):
         print(f"📧 SENDING EMAIL TO: {email} | OTP: {otp} | Role: {role}")
         send_mail(
             subject, plain_message, settings.EMAIL_HOST_USER, [email], 
-            fail_silently=False, html_message=html_message
+            fail_silently=True, html_message=html_message
         )
         return Response({"status": "success", "message": "OTP Sent to Email"})
     except Exception as e:

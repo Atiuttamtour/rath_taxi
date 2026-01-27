@@ -25,6 +25,19 @@ if RENDER_EXTERNAL_HOSTNAME:
 else:
     ALLOWED_HOSTS = ['*']
 
+    # --- PRODUCTION SECURITY OVERRIDES ---
+# This tells Django it's behind Render's proxy so HTTPS works correctly
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# This fixes the "403 Forbidden" error by trusting your live URL
+CSRF_TRUSTED_ORIGINS = [
+    "https://rath-taxi.onrender.com",
+    "https://*.onrender.com",
+    "http://localhost:8081", # For Expo local testing
+]
+
+# You already have CORS_ALLOW_ALL_ORIGINS = True, which is good for Expo!
+
 
 # Application definition
 

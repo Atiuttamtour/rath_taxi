@@ -85,7 +85,7 @@ def send_otp_email(request):
             plain_message, 
             settings.EMAIL_HOST_USER, 
             [email], 
-            fail_silently=True, # 🛡️ Crucial for Render Free Tier
+            fail_silently=False, # 🛡️ Crucial for Render Free Tier
             html_message=html_message
         )
         return Response({"status": "success", "message": "OTP Sent to Email"})

@@ -17,8 +17,12 @@ class User(AbstractUser):
         (AGENT, 'Agent'),
     ]
     
-    # Basic Info
-    phone_number = models.CharField(max_length=15, unique=True)
+    # 🚀 UPDATE: Email is now the main login ID
+    email = models.EmailField(unique=True) 
+    
+    # 🚀 UPDATE: Phone is now optional (so we can sign up with email first)
+    phone_number = models.CharField(max_length=15, blank=True, null=True)
+    
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default=CUSTOMER)
     
     # --- SECURITY & VERIFICATION ---
@@ -53,8 +57,12 @@ class User(AbstractUser):
         verbose_name='user permissions',
     )
 
+    # We use Email to log in now, not username
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username']
+
     def __str__(self):
-        return f"{self.username} ({self.role})"
+        return f"{self.email} ({self.role})"
 
 
 # ==========================================
@@ -97,7 +105,6 @@ class Trip(models.Model):
     start_time = models.DateTimeField()
     
     # 🚀 ZERO DECREMENT LOGIC:
-    # We keep 'available_seats' to show capacity, but we won't decrease it automatically.
     available_seats = models.IntegerField(default=3)
     
     price_per_seat = models.DecimalField(max_digits=10, decimal_places=2)
@@ -113,12 +120,7 @@ class Trip(models.Model):
 # 4. THE BOOKING (The Bridge)
 # ==========================================
 class Booking(models.Model):
-    # 🚀 CRITICAL FIX FOR DELETE BUTTON:
-    # on_delete=models.CASCADE ensures that if a Driver deletes a Trip,
-    # the associated Bookings/Passenger List are also deleted automatically.
-    # If this was PROTECT, the delete button would fail.
     trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='bookings')
-    
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='booked_trips')
     
     seats_booked = models.IntegerField(default=1)
@@ -132,17 +134,17 @@ class Booking(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='CONFIRMED')
 
     def __str__(self):
-        return f"Ticket #{self.id} - {self.customer.username}"
+        return f"Ticket #{self.id} - {self.customer.email}"
 
 
 # ==========================================
-# 5. SECURITY (OTP STORAGE)
+# 5. SECURITY (EMAIL OTP STORAGE)
 # ==========================================
-class PhoneOTP(models.Model):
-    phone_number = models.CharField(max_length=15, unique=True)
+class EmailOTP(models.Model):
+    email = models.EmailField(unique=True)  # Changed from Phone to Email
     otp_code = models.CharField(max_length=6)
     count = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.phone_number} - {self.otp_code}"
+        return f"{self.email} - {self.otp_code}"

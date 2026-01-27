@@ -1,23 +1,19 @@
-from django.contrib import admin
 from django.urls import path
 from rath_api import views
 from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
-    # Admin Panel
-    path('admin/', admin.site.urls),
-
-    # --- AUTH & USER APIs ---
-    # 🚀 FIX: Removed 'api/' from start because the Project URL already handles it
-    path('send-otp/', views.send_otp),
-    path('verify-otp/', views.verify_otp),
-    path('check-phone/', views.check_phone),
+    # --- AUTH & USER APIs (UPDATED FOR EMAIL) ---
+    path('send-otp-email/', views.send_otp_email),     # 🚀 Renamed
+    path('verify-otp-email/', views.verify_otp_email), # 🚀 Renamed
+    path('check-email/', views.check_email),           # 🚀 Renamed
+    
     path('signup-customer/', views.signup_customer),
-    path('signup-driver/', views.signup_driver), # The one we are testing!
+    path('signup-driver/', views.signup_driver),
     path('get-profile/', views.get_profile),
 
-    # --- TRIP & BOOKING APIs ---
+    # --- TRIP & BOOKING APIs (UNCHANGED) ---
     path('create-trip/', views.create_trip),
     path('delete-trip/', views.delete_trip),
     path('get-driver-trips/', views.get_driver_trips),

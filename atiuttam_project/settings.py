@@ -121,9 +121,24 @@ JAZZMIN_SETTINGS = {
     "search_model": "rath_api.User",
     "show_ui_builder": False,
 }
-import os
 
 # --- PROFESSIONAL SETUP: Media Files (Images/Documents) ---
 # This tells Django where to save the Driver Photos
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# --- 6. EMAIL OTP CONFIGURATION (Gmail) ---
+# This powers the login system using your Atiuttam Travels email
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+
+# The Email Account that sends the OTPs
+EMAIL_HOST_USER = 'atiuttamtravels@gmail.com'
+
+# ⚠️ SECURITY STEP: Paste your 16-letter App Password below inside the quotes
+EMAIL_HOST_PASSWORD = 'ynwopqoaeoazhpvz'
+
+# The Name people see in their Inbox (Branding)
+DEFAULT_FROM_EMAIL = 'Atiuttam.com <atiuttamtravels@gmail.com>'

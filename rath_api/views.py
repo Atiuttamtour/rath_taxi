@@ -1,8 +1,11 @@
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
+from django.utils.html import strip_tags
 from datetime import timedelta
-from .models import Trip, User, Booking, PhoneOTP 
+from .models import Trip, User, Booking, EmailOTP 
+from django.core.mail import send_mail            
+from django.conf import settings
 import json
 import math
 import random 
@@ -11,7 +14,7 @@ import random
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 # ==========================================
 # 1. AUTHENTICATION & SECURITY (OTP SYSTEM)
@@ -20,66 +23,122 @@ from rest_framework.parsers import MultiPartParser, FormParser
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def send_otp(request):
-    phone = request.data.get('phone')
-    if not phone:
-        return Response({"error": "Phone number required"}, status=400)
+def send_otp_email(request):
+    """
+    Generates and Saves OTP.
+    FIX APPLIED: Used 'update_or_create' to ensure OTP is definitely saved in DB.
+    """
+    email = request.data.get('email')
+    role = request.data.get('role')
 
+    if not email:
+        return Response({"error": "Email address required"}, status=400)
+
+    # 1. Generate 4-digit Code
     otp = str(random.randint(1000, 9999))
-    obj, created = PhoneOTP.objects.get_or_create(phone_number=phone)
-    obj.otp_code = otp
-    obj.save()
+    
+    # 2. FORCE SAVE to Database (Fixes the "Ghost OTP" bug)
+    obj, created = EmailOTP.objects.update_or_create(
+        email=email,
+        defaults={'otp_code': otp}
+    )
+    
+    print(f"💾 OTP SAVED TO DB: {obj.email} -> {obj.otp_code}") # Debug Log
 
-    print(f" SECURITY ALERT: OTP for {phone} is {otp}")
-    return Response({"status": "success", "message": "OTP Sent Successfully", "debug_otp": otp})
+    # 3. Determine Greeting
+    if role == 'driver':
+        subject = "Let's get moving! 🚗"
+        greeting = "Hi Partner,"
+        body_text = f"Ready to earn? Your login OTP is: {otp}"
+        closing_text = "Have a productive day on the road!"
+    else:
+        subject = "Ready for your next trip? 🌍"
+        greeting = "Hi there,"
+        body_text = f"Your ride awaits! Your login OTP is: {otp}"
+        closing_text = "Where are we going today?"
+
+    # 4. Construct Email
+    logo_voy = "https://atiuttam.com/assets/voy1.png"
+    logo_atiu = "https://atiuttam.com/assets/atiubes.png"
+
+    html_message = f"""
+    <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+        <h2 style="color: #4A90E2;">{subject}</h2>
+        <p><strong>{greeting}</strong></p>
+        <p style="font-size: 16px;">{body_text}</p>
+        <div style="background-color: #f4f4f4; padding: 15px; text-align: center; border-radius: 8px; margin: 20px 0;">
+            <span style="font-size: 24px; letter-spacing: 5px; font-weight: bold; color: #000;">{otp}</span>
+        </div>
+        <p>{closing_text}</p>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="font-size: 14px; color: #555;">
+            Best Wishes,<br><strong>Voy by Atiuttam.com</strong>
+        </p>
+        <div style="margin-top: 15px;">
+            <img src="{logo_voy}" alt="Voy Logo" height="50" style="margin-right: 15px; vertical-align: middle;">
+            <img src="{logo_atiu}" alt="Atiuttam Logo" height="50" style="vertical-align: middle;">
+        </div>
+    </div>
+    """
+    plain_message = strip_tags(html_message)
+
+    try:
+        print(f"📧 SENDING EMAIL TO: {email} | OTP: {otp} | Role: {role}")
+        send_mail(
+            subject, plain_message, settings.EMAIL_HOST_USER, [email], 
+            fail_silently=False, html_message=html_message
+        )
+        return Response({"status": "success", "message": "OTP Sent to Email"})
+    except Exception as e:
+        print(f"❌ EMAIL ERROR: {str(e)}")
+        return Response({"error": "Failed to send email."}, status=500)
 
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def verify_otp(request):
-    phone = request.data.get('phone')
+def verify_otp_email(request):
+    """
+    Verifies OTP and returns User Status.
+    FIX APPLIED: Returns 'is_verified' so App knows if it should block the driver.
+    """
+    email = request.data.get('email')
     otp = request.data.get('otp')
 
     try:
-        otp_record = PhoneOTP.objects.get(phone_number=phone)
+        otp_record = EmailOTP.objects.get(email=email)
         if otp_record.otp_code == otp:
             otp_record.delete() # OTP is single-use
             try:
-                user = User.objects.get(phone_number=phone)
+                user = User.objects.get(email=email)
                 return Response({
                     "status": "success",
                     "exists": True,
                     "role": user.role,
                     "name": user.first_name,
                     "user_id": user.id,
-                    "is_verified": user.is_verified
+                    "is_verified": user.is_verified # 🚀 CRITICAL FOR APP LOGIC
                 })
             except User.DoesNotExist:
                 return Response({"status": "success", "exists": False})
         else:
             return Response({"error": "Invalid OTP Code"}, status=400)
-    except PhoneOTP.DoesNotExist:
-        return Response({"error": "Please request a new OTP"}, status=400)
+    except EmailOTP.DoesNotExist:
+        return Response({"error": "Please request a new Code"}, status=400)
 
 # ==========================================
-# 2. USER MANAGEMENT (SMART SIGNUP & PROFILE)
+# 2. USER MANAGEMENT (SMART SIGNUP)
 # ==========================================
 
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def check_phone(request):
-    """
-    Checks if a user exists to route them to Login or Signup.
-    """
-    phone = request.data.get('phone')
+def check_email(request):
+    email = request.data.get('email')
     try:
-        user = User.objects.get(phone_number=phone)
+        user = User.objects.get(email=email)
         return Response({
-            "exists": True, 
-            "role": user.role, 
-            "name": user.first_name,
-            "user_id": user.id,
+            "exists": True, "role": user.role, 
+            "name": user.first_name, "user_id": user.id, 
             "is_verified": user.is_verified 
         })
     except User.DoesNotExist:
@@ -91,26 +150,21 @@ def check_phone(request):
 def signup_customer(request):
     data = request.data
     try:
-        if not data.get('phone') or not data.get('name'):
-             return Response({"status": "error", "message": "Phone and Name are required"}, status=400)
+        if not data.get('email') or not data.get('name'):
+             return Response({"status": "error", "message": "Email/Name required"}, status=400)
 
-        phone = data['phone']
-        email = data.get('email', '').strip()
+        email = data['email']
+        name = data['name']
+        phone = data.get('phone', '')
 
-        # 🛡️ SECURITY FIX: Check if email is already taken by a DIFFERENT phone number
-        if email and User.objects.filter(email=email).exclude(phone_number=phone).exists():
-            return Response({"status": "error", "message": "This email is already in use by another account."}, status=400)
-
-        # 🚀 SMART UPDATE: If user exists (maybe dropped off halfway), update them.
         user, created = User.objects.get_or_create(
-            phone_number=phone,
-            defaults={'username': phone} 
+            email=email, defaults={'username': email} 
         )
         
-        user.first_name = data['name']
-        if email: user.email = email
+        user.first_name = name
+        if phone: user.phone_number = phone
         user.role = 'customer'
-        user.is_verified = True # Customers don't need doc verification
+        user.is_verified = True 
         user.save()
         
         return Response({"status": "success", "user_id": user.id, "role": "customer"})
@@ -120,80 +174,64 @@ def signup_customer(request):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@parser_classes([MultiPartParser, FormParser])
+@parser_classes([MultiPartParser, FormParser]) 
 def signup_driver(request):
-    """
-    SMART SIGNUP (PROFESSIONAL): 
-    - Handles Document Uploads.
-    - 🚀 BUG FIX: Successfully upgrades a 'Customer' to a 'Driver' without crashing.
-    """
-    data = request.data
     try:
-        # 1. Extract Data
-        phone = data.get('phone')
-        full_name = data.get('fullName')
-        email = data.get('email', '').strip()
-        address = data.get('address', '')
-        vehicle_number = data.get('vehicle_number')
-        vehicle_type = data.get('vehicle_type', 'Sedan') 
+        print("\n🚀 DEBUG START: Driver Signup 🚀")
+        
+        # 1. CHECK FOR FILES
+        # If this list is empty, the App (Frontend) is sending an empty envelope
+        print(f"📁 FILES RECEIVED: {request.FILES.keys()}")
+        
+        if not request.FILES:
+            print("❌ ERROR: Request has NO files. The App is not sending them correctly.")
+            return Response({"status": "error", "message": "Server received 0 files. Check App FormData."}, status=400)
 
-        if not phone:
-            return Response({"status": "error", "message": "Phone number is missing"}, status=400)
+        # 2. Grab Data
+        data = request.data
+        email = data.get('email')
+        
+        user, created = User.objects.get_or_create(email=email, defaults={'username': email})
+        
+        # 3. FORCE SAVE IMAGES
+        # We explicitly print what we are saving
+        if 'profile_photo' in request.FILES: 
+            print("   -> Saving Profile Photo...")
+            user.profile_photo = request.FILES['profile_photo']
+            
+        if 'license_photo' in request.FILES: 
+            print("   -> Saving License Photo...")
+            user.license_photo = request.FILES['license_photo']
+            
+        if 'rc_photo' in request.FILES: 
+            user.rc_photo = request.FILES['rc_photo']
+            
+        if 'aadhaar_photo' in request.FILES: 
+            user.aadhaar_photo = request.FILES['aadhaar_photo']
 
-        # 🛡️ SECURITY FIX: Check if email is already taken by a DIFFERENT phone number
-        if email and User.objects.filter(email=email).exclude(phone_number=phone).exists():
-            return Response({"status": "error", "message": "This email is already in use by another driver."}, status=400)
-
-        # 2. Get or Create User (This handles the "Account Upgrade" scenario)
-        user, created = User.objects.get_or_create(
-            phone_number=phone,
-            defaults={
-                'username': phone, 
-                'first_name': full_name,
-                'email': email,
-                'role': 'driver',
-                'is_verified': False, 
-                'vehicle_number': vehicle_number,
-                'vehicle_type': vehicle_type,
-                'address': address
-            }
-        )
-
-        # 3. FORCE UPDATE: Even if user existed as Customer, make them Driver now
+        # 4. Save Details
         user.role = 'driver'
-        user.username = phone # Ensure unique constraint is met
+        user.is_verified = False
+        user.first_name = data.get('fullName', user.first_name)
+        user.phone_number = data.get('phone', user.phone_number)
+        user.vehicle_number = data.get('vehicle_number', user.vehicle_number)
         
-        if full_name: user.first_name = full_name
-        if email: user.email = email
-        if vehicle_number: user.vehicle_number = vehicle_number
-        if vehicle_type: user.vehicle_type = vehicle_type
-        if address: user.address = address
-        
-        # Reset verification because they are uploading NEW documents
-        user.is_verified = False 
-        
-        # 4. Handle Images (Only update if new files provided)
-        if 'profile_photo' in request.FILES: user.profile_photo = request.FILES['profile_photo']
-        if 'license_photo' in request.FILES: user.license_photo = request.FILES['license_photo']
-        if 'rc_photo' in request.FILES: user.rc_photo = request.FILES['rc_photo']
-        if 'aadhaar_photo' in request.FILES: user.aadhaar_photo = request.FILES['aadhaar_photo']
-
         user.save()
+        print(f"✅ SUCCESS: Saved User {user.email}")
+        
+        return Response({"status": "success", "user_id": user.id})
 
-        return Response({"status": "success", "user_id": user.id, "role": "driver"})
     except Exception as e:
-        print(f"❌ SIGNUP ERROR: {str(e)}") 
+        print(f"❌ CRASH: {str(e)}") 
         return Response({"status": "error", "message": str(e)}, status=500)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_profile(request):
-    phone = request.GET.get('phone')
-    if not phone:
-        return JsonResponse({"status": "error", "message": "Phone parameter missing"}, status=400)
-
+    email = request.GET.get('email')
+    if not email: return JsonResponse({"status": "error"}, status=400)
     try:
-        user = User.objects.get(phone_number=phone)
+        user = User.objects.get(email=email)
         return JsonResponse({
             "status": "success",
             "name": user.first_name,
@@ -234,13 +272,10 @@ def create_trip(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            driver_user = User.objects.get(phone_number=data['driver_phone'])
+            driver_user = User.objects.get(email=data['driver_email'])
             
-            # 🚀 CHECK VERIFICATION STATUS
             if not driver_user.is_verified:
-                 return JsonResponse({
-                     'error': 'Account Under Review. Please wait for Admin approval.'
-                 }, status=403)
+                 return JsonResponse({'error': 'Account Under Review.'}, status=403)
 
             new_trip = Trip.objects.create(
                 driver=driver_user, 
@@ -267,29 +302,21 @@ def delete_trip(request):
         try:
             data = json.loads(request.body)
             trip = Trip.objects.get(id=data['trip_id'])
-            
-            # Security: Ensure only the creator can delete
-            # 🚀 FIX: Enhanced normalization to ensure matching works perfectly
-            db_phone = str(trip.driver.phone_number).replace(" ", "").replace("+91", "").replace("-", "").strip()
-            req_phone = str(data['driver_phone']).replace(" ", "").replace("+91", "").replace("-", "").strip()
-
-            if db_phone == req_phone:
+            if trip.driver.email == data['driver_email']:
                 trip.delete()
                 return JsonResponse({'status': 'success', 'message': 'Route Deleted'})
             else:
-                return JsonResponse({'error': 'Unauthorized: Phone mismatch'}, status=403)
+                return JsonResponse({'error': 'Unauthorized'}, status=403)
         except Trip.DoesNotExist:
             return JsonResponse({'error': 'Trip not found'}, status=404)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
 
 def get_driver_trips(request):
-    phone = request.GET.get('phone')
+    email = request.GET.get('email')
     try:
-        driver = User.objects.get(phone_number=phone)
+        driver = User.objects.get(email=email)
         time_threshold = timezone.now() - timedelta(hours=24)
-        
-        # 🚀 AUTO DELETE LOGIC: This filter naturally hides trips older than 24h
         trips = Trip.objects.filter(driver=driver, status='SCHEDULED', start_time__gte=time_threshold)
         
         results = []
@@ -312,7 +339,6 @@ def search_trips(request):
     pickup_lng = float(request.GET.get('lng', 0.0))
 
     time_threshold = timezone.now() - timedelta(hours=24)
-    # 🚀 AUTO DELETE LOGIC: We only search for trips created in the last 24h
     trips = Trip.objects.filter(
         status='SCHEDULED',
         available_seats__gt=0, 
@@ -331,9 +357,8 @@ def search_trips(request):
         if is_on_the_way(driver_source, driver_dest, customer_loc, driver_dest):
             results.append({
                 'driver_name': trip.driver.first_name,
-                # 🚀 CRITICAL FIX: Send Phone Number so Frontend 'Contact' button works!
-                'driver_phone': trip.driver.phone_number, 
-                'vehicle': trip.driver.vehicle_number if hasattr(trip.driver, 'vehicle_number') else trip.driver.license_number, 
+                'driver_phone': trip.driver.phone_number if trip.driver.phone_number else "Contact via App", 
+                'vehicle': trip.driver.vehicle_number if hasattr(trip.driver, 'vehicle_number') else "", 
                 'price': float(trip.price_per_seat),
                 'source': trip.source_city,
                 'destination': trip.destination_city,
@@ -354,12 +379,12 @@ def book_seat(request):
     try:
         trip = Trip.objects.get(id=data['trip_id'])
         user_id = data.get('user_id')
-        user_phone = data.get('phone')
+        email = data.get('email')
         
         if user_id:
             customer = User.objects.get(id=user_id)
         else:
-            customer = User.objects.get(phone_number=user_phone)
+            customer = User.objects.get(email=email)
             
         seats_wanted = int(data.get('seats', 1))
         
@@ -375,12 +400,6 @@ def book_seat(request):
             total_cost=cost,
             status='CONFIRMED'
         )
-        
-        # 🚀 LOGIC CHANGE: ZERO DECREMENT
-        # We record the booking so the driver sees the name, 
-        # BUT we do NOT subtract the seat count.
-        # trip.available_seats -= seats_wanted 
-        # trip.save()
         
         return Response({
             'status': 'success',
@@ -399,9 +418,9 @@ def book_seat(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_user_bookings(request):
-    phone = request.GET.get('phone')
+    email = request.GET.get('email')
     try:
-        customer = User.objects.get(phone_number=phone)
+        customer = User.objects.get(email=email)
         bookings = Booking.objects.filter(customer=customer).order_by('-booking_date')
         
         data = []
@@ -441,15 +460,15 @@ def get_trip_bookings(request):
 @permission_classes([AllowAny])
 def get_trip_passengers(request):
     trip_id = request.GET.get('trip_id')
-    phone = request.GET.get('phone')
+    email = request.GET.get('email')
     try:
-        trip = Trip.objects.get(id=trip_id, driver__phone_number=phone)
+        trip = Trip.objects.get(id=trip_id, driver__email=email)
         bookings = Booking.objects.filter(trip=trip)
         passengers = []
         for b in bookings:
             passengers.append({
                 "name": b.customer.first_name,
-                "phone": b.customer.phone_number,
+                "phone": b.customer.phone_number if b.customer.phone_number else "Email User",
                 "seats": b.seats_booked,
                 "status": b.status
             })

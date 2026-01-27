@@ -25,8 +25,8 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 @permission_classes([AllowAny])
 def send_otp_email(request):
     """
-    Generates and Saves OTP.
-    FIX APPLIED: Used 'update_or_create' to ensure OTP is definitely saved in DB.
+    Generates and Saves OTP. 
+    Handles Render SMTP blocks gracefully with fail_silently.
     """
     email = request.data.get('email')
     role = request.data.get('role')
@@ -34,18 +34,18 @@ def send_otp_email(request):
     if not email:
         return Response({"error": "Email address required"}, status=400)
 
-    # 1. Generate 4-digit Code
+    # Generate 4-digit Code
     otp = str(random.randint(1000, 9999))
     
-    # 2. FORCE SAVE to Database (Fixes the "Ghost OTP" bug)
+    # Force Save to Database (prevents the 'Ghost OTP' bug)
     obj, created = EmailOTP.objects.update_or_create(
         email=email,
         defaults={'otp_code': otp}
     )
     
-    print(f"💾 OTP SAVED TO DB: {obj.email} -> {obj.otp_code}") # Debug Log
+    print(f"💾 OTP SAVED TO DB: {obj.email} -> {obj.otp_code}")
 
-    # 3. Determine Greeting
+    # Determine Branding based on Role
     if role == 'driver':
         subject = "Let's get moving! 🚗"
         greeting = "Hi Partner,"
@@ -57,13 +57,13 @@ def send_otp_email(request):
         body_text = f"Your ride awaits! Your login OTP is: {otp}"
         closing_text = "Where are we going today?"
 
-    # 4. Construct Email
+    # Construct HTML Email
     logo_voy = "https://atiuttam.com/assets/voy1.png"
     logo_atiu = "https://atiuttam.com/assets/atiubes.png"
 
     html_message = f"""
     <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-        <h2 style="color: #4A90E2;">{subject}</h2>
+        <h2 style="color: #FFB800;">{subject}</h2>
         <p><strong>{greeting}</strong></p>
         <p style="font-size: 16px;">{body_text}</p>
         <div style="background-color: #f4f4f4; padding: 15px; text-align: center; border-radius: 8px; margin: 20px 0;">
@@ -74,40 +74,48 @@ def send_otp_email(request):
         <p style="font-size: 14px; color: #555;">
             Best Wishes,<br><strong>Voy by Atiuttam.com</strong>
         </p>
-        <div style="margin-top: 15px;">
-            <img src="{logo_voy}" alt="Voy Logo" height="50" style="margin-right: 15px; vertical-align: middle;">
-            <img src="{logo_atiu}" alt="Atiuttam Logo" height="50" style="vertical-align: middle;">
-        </div>
     </div>
     """
     plain_message = strip_tags(html_message)
 
     try:
-        print(f"📧 SENDING EMAIL TO: {email} | OTP: {otp} | Role: {role}")
+        print(f"📧 ATTEMPTING EMAIL TO: {email}")
         send_mail(
-            subject, plain_message, settings.EMAIL_HOST_USER, [email], 
-            fail_silently=True, html_message=html_message
+            subject, 
+            plain_message, 
+            settings.EMAIL_HOST_USER, 
+            [email], 
+            fail_silently=True, # 🛡️ Crucial for Render Free Tier
+            html_message=html_message
         )
         return Response({"status": "success", "message": "OTP Sent to Email"})
     except Exception as e:
-        print(f"❌ EMAIL ERROR: {str(e)}")
-        return Response({"error": "Failed to send email."}, status=500)
+        print(f"❌ SMTP Error: {str(e)}")
+        # We still return success because the OTP is saved in the DB.
+        # This prevents the 500 Error from blocking the user.
+        return Response({"status": "success", "message": "OTP Generated", "debug": str(e)})
 
+# ==================================================
+# 2. VERIFY OTP EMAIL
+# ==================================================
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def verify_otp_email(request):
     """
     Verifies OTP and returns User Status.
-    FIX APPLIED: Returns 'is_verified' so App knows if it should block the driver.
     """
     email = request.data.get('email')
     otp = request.data.get('otp')
 
+    if not email or not otp:
+        return Response({"error": "Email and OTP required"}, status=400)
+
     try:
         otp_record = EmailOTP.objects.get(email=email)
         if otp_record.otp_code == otp:
-            otp_record.delete() # OTP is single-use
+            otp_record.delete() # Single-use security
+            
             try:
                 user = User.objects.get(email=email)
                 return Response({
@@ -116,7 +124,7 @@ def verify_otp_email(request):
                     "role": user.role,
                     "name": user.first_name,
                     "user_id": user.id,
-                    "is_verified": user.is_verified # 🚀 CRITICAL FOR APP LOGIC
+                    "is_verified": user.is_verified # Required for Voy app logic
                 })
             except User.DoesNotExist:
                 return Response({"status": "success", "exists": False})

@@ -138,19 +138,16 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # --- 6. EMAIL OTP CONFIGURATION (Gmail) ---
-# 🚀 FIX APPLIED: Switched to Port 465 (SSL) to bypass Render firewall block
+# 🚀 FIX: Force Port 465 (SSL) to bypass Render Block
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 465          # Changed from 587
-EMAIL_USE_SSL = True      # Changed to True
-EMAIL_USE_TLS = False     # Changed to False (SSL replaces TLS on 465)
-EMAIL_TIMEOUT = 10        # Added to prevent infinite hanging
 
-# The Email Account that sends the OTPs
+# ⚠️ CRITICAL SETTINGS FOR RENDER
+EMAIL_PORT = 465           # Must be 465, not 587
+EMAIL_USE_SSL = True       # Must be True
+EMAIL_USE_TLS = False      # Must be False
+
 EMAIL_HOST_USER = 'atiuttamtravels@gmail.com'
-
-# ⚠️ SECURITY STEP: Paste your 16-letter App Password below inside the quotes
-EMAIL_HOST_PASSWORD = 'ynwopqoaeoazhpvz'
-
-# The Name people see in their Inbox (Branding)
+EMAIL_HOST_PASSWORD = 'ynwopqoaeoazhpvz' # Your App Password
+EMAIL_TIMEOUT = 10
 DEFAULT_FROM_EMAIL = 'Atiuttam.com <atiuttamtravels@gmail.com>'

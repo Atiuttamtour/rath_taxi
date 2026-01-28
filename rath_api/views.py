@@ -494,15 +494,15 @@ def get_trip_passengers(request):
     except Trip.DoesNotExist:
         return JsonResponse({"status": "error", "message": "Trip not found or unauthorized"}, status=404)
 
-        from django.http import HttpResponse
-# Add this to the bottom of views.py
+from django.http import HttpResponse
+
 def test_email(request):
     try:
         send_mail(
             "Test Connection",
             "If you read this, Render can talk to Gmail.",
             settings.EMAIL_HOST_USER,
-            ['hariverma016@gmail.com'], # Your real email here
+            ['hariverma016@gmail.com'], 
             fail_silently=False
         )
         return HttpResponse("<h1>✅ SUCCESS! Email Sent.</h1>")

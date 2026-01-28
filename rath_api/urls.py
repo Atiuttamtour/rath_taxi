@@ -23,8 +23,7 @@ urlpatterns = [
     path('get-trip-bookings/', views.get_trip_bookings),
     path('get-trip-passengers/', views.get_trip_passengers),
 
-    # 🚀 DEBUG ROUTE (Add this line)
-    path('test-email/', views.test_email), 
+   
 ]
 
 # SERVE IMAGES IN ADMIN PANEL

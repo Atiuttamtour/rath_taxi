@@ -494,17 +494,3 @@ def get_trip_passengers(request):
     except Trip.DoesNotExist:
         return JsonResponse({"status": "error", "message": "Trip not found or unauthorized"}, status=404)
 
-from django.http import HttpResponse
-
-def test_email(request):
-    try:
-        send_mail(
-            "Test Connection",
-            "If you read this, Render can talk to Gmail.",
-            settings.EMAIL_HOST_USER,
-            ['hariverma016@gmail.com'], 
-            fail_silently=False
-        )
-        return HttpResponse("<h1>✅ SUCCESS! Email Sent.</h1>")
-    except Exception as e:
-        return HttpResponse(f"<h1>❌ FAILED</h1><p>Error: {str(e)}</p>")

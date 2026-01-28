@@ -25,7 +25,7 @@ if RENDER_EXTERNAL_HOSTNAME:
 else:
     ALLOWED_HOSTS = ['*']
 
-    # --- PRODUCTION SECURITY OVERRIDES ---
+# --- PRODUCTION SECURITY OVERRIDES ---
 # This tells Django it's behind Render's proxy so HTTPS works correctly
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
@@ -35,9 +35,6 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.onrender.com",
     "http://localhost:8081", # For Expo local testing
 ]
-
-# You already have CORS_ALLOW_ALL_ORIGINS = True, which is good for Expo!
-
 
 # Application definition
 
@@ -126,13 +123,13 @@ CORS_ALLOW_ALL_ORIGINS = True
 
 # --- 5. PROFESSIONAL BRANDING SETTINGS ---
 JAZZMIN_SETTINGS = {
-    "site_title": "Atiuttam Rath Admin",
-    "site_header": "Atiuttam Rath",
-    "site_brand": "Atiuttam Rath",
-    "welcome_sign": "Welcome to Atiuttam Rath HQ",
-    "copyright": "Atiuttam Rath Ltd",
-    "search_model": "rath_api.User",
-    "show_ui_builder": False,
+    'site_title': 'Atiuttam Rath Admin',
+    'site_header': 'Atiuttam Rath',
+    'site_brand': 'Atiuttam Rath',
+    'welcome_sign': 'Welcome to Atiuttam Rath HQ',
+    'copyright': 'Atiuttam Rath Ltd',
+    'search_model': 'rath_api.User',
+    'show_ui_builder': False,
 }
 
 # --- PROFESSIONAL SETUP: Media Files (Images/Documents) ---
@@ -141,11 +138,13 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # --- 6. EMAIL OTP CONFIGURATION (Gmail) ---
-# This powers the login system using your Atiuttam Travels email
+# 🚀 FIX APPLIED: Switched to Port 465 (SSL) to bypass Render firewall block
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
+EMAIL_PORT = 465          # Changed from 587
+EMAIL_USE_SSL = True      # Changed to True
+EMAIL_USE_TLS = False     # Changed to False (SSL replaces TLS on 465)
+EMAIL_TIMEOUT = 10        # Added to prevent infinite hanging
 
 # The Email Account that sends the OTPs
 EMAIL_HOST_USER = 'atiuttamtravels@gmail.com'

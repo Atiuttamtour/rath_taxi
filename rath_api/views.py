@@ -9,6 +9,7 @@ from django.conf import settings
 import json
 import math
 import random 
+import threading # <--- 🚀 NEW UPDATE: Essential for Background Emails
 
 # --- IMPORTS FOR API ---
 from rest_framework.decorators import api_view, permission_classes, parser_classes
@@ -26,10 +27,11 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 def send_otp_email(request):
     """
     Generates and Saves OTP. 
-    Handles Render SMTP blocks gracefully with fail_silently.
+    Sends email in BACKGROUND to prevent Render Timeout (500 Error).
     """
     email = request.data.get('email')
-    role = request.data.get('role')
+    # Default to 'customer' if role is missing to prevent errors
+    role = request.data.get('role', 'customer') 
 
     if not email:
         return Response({"error": "Email address required"}, status=400)
@@ -37,7 +39,8 @@ def send_otp_email(request):
     # Generate 4-digit Code
     otp = str(random.randint(1000, 9999))
     
-    # Force Save to Database (prevents the 'Ghost OTP' bug)
+    # 1. Force Save to Database IMMEDIATELY (prevents the 'Ghost OTP' bug)
+    # This happens in the main thread so it is fast and reliable.
     obj, created = EmailOTP.objects.update_or_create(
         email=email,
         defaults={'otp_code': otp}
@@ -45,8 +48,9 @@ def send_otp_email(request):
     
     print(f"💾 OTP SAVED TO DB: {obj.email} -> {obj.otp_code}")
 
-    # Determine Branding based on Role
-    if role == 'driver':
+    # Determine Branding based on Role (Safe .lower() check)
+    user_role = str(role).lower()
+    if user_role == 'driver':
         subject = "Let's get moving! 🚗"
         greeting = "Hi Partner,"
         body_text = f"Ready to earn? Your login OTP is: {otp}"
@@ -78,22 +82,28 @@ def send_otp_email(request):
     """
     plain_message = strip_tags(html_message)
 
-    try:
-        print(f"📧 ATTEMPTING EMAIL TO: {email}")
-        send_mail(
-            subject, 
-            plain_message, 
-            settings.EMAIL_HOST_USER, 
-            [email], 
-            fail_silently=False, # 🛡️ Crucial for Render Free Tier
-            html_message=html_message
-        )
-        return Response({"status": "success", "message": "OTP Sent to Email"})
-    except Exception as e:
-        print(f"❌ SMTP Error: {str(e)}")
-        # We still return success because the OTP is saved in the DB.
-        # This prevents the 500 Error from blocking the user.
-        return Response({"status": "success", "message": "OTP Generated", "debug": str(e)})
+    # 🚀 NEW UPDATE: Background Email Function
+    def send_email_in_background():
+        try:
+            print(f"📧 ATTEMPTING BACKGROUND EMAIL TO: {email}")
+            send_mail(
+                subject, 
+                plain_message, 
+                settings.EMAIL_HOST_USER, 
+                [email], 
+                fail_silently=False, # We want to see errors in logs if they happen
+                html_message=html_message
+            )
+            print(f"✅ EMAIL SENT SUCCESSFULLY TO: {email}")
+        except Exception as e:
+            print(f"❌ BACKGROUND SMTP ERROR: {str(e)}")
+
+    # 2. Start the Thread (Fire and Forget)
+    email_thread = threading.Thread(target=send_email_in_background)
+    email_thread.start()
+
+    # 3. Return Success Immediately (Don't wait for Gmail)
+    return Response({"status": "success", "message": "OTP Generated & Sent"})
 
 # ==================================================
 # 2. VERIFY OTP EMAIL

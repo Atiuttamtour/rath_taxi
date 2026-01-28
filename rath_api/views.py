@@ -27,7 +27,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 def send_otp_email(request):
     """
     Generates and Saves OTP. 
-    Sends email in BACKGROUND to prevent Render Timeout (500 Error).
+    Sends email DIRECTLY to ensure delivery (Synchronous Mode).
     """
     email = request.data.get('email')
     # Default to 'customer' if role is missing to prevent errors
@@ -39,8 +39,8 @@ def send_otp_email(request):
     # Generate 4-digit Code
     otp = str(random.randint(1000, 9999))
     
-    # 1. Force Save to Database IMMEDIATELY (prevents the 'Ghost OTP' bug)
-    # This happens in the main thread so it is fast and reliable.
+    # 1. Force Save to Database IMMEDIATELY
+    # This ensures the OTP exists even if the email fails later.
     obj, created = EmailOTP.objects.update_or_create(
         email=email,
         defaults={'otp_code': otp}
@@ -82,28 +82,25 @@ def send_otp_email(request):
     """
     plain_message = strip_tags(html_message)
 
-    # 🚀 NEW UPDATE: Background Email Function
-    def send_email_in_background():
-        try:
-            print(f"📧 ATTEMPTING BACKGROUND EMAIL TO: {email}")
-            send_mail(
-                subject, 
-                plain_message, 
-                settings.EMAIL_HOST_USER, 
-                [email], 
-                fail_silently=False, # We want to see errors in logs if they happen
-                html_message=html_message
-            )
-            print(f"✅ EMAIL SENT SUCCESSFULLY TO: {email}")
-        except Exception as e:
-            print(f"❌ BACKGROUND SMTP ERROR: {str(e)}")
-
-    # 2. Start the Thread (Fire and Forget)
-    email_thread = threading.Thread(target=send_email_in_background)
-    email_thread.start()
-
-    # 3. Return Success Immediately (Don't wait for Gmail)
-    return Response({"status": "success", "message": "OTP Generated & Sent"})
+    # 🚀 UPDATED: Direct Sending (No Threading)
+    # This forces the server to wait for Gmail's response.
+    try:
+        print(f"📧 ATTEMPTING DIRECT EMAIL TO: {email}")
+        send_mail(
+            subject, 
+            plain_message, 
+            settings.EMAIL_HOST_USER, 
+            [email], 
+            fail_silently=False, 
+            html_message=html_message
+        )
+        print(f"✅ EMAIL SENT SUCCESSFULLY TO: {email}")
+        return Response({"status": "success", "message": "OTP Generated & Sent"})
+        
+    except Exception as e:
+        print(f"❌ SMTP ERROR: {str(e)}")
+        # IMPORTANT: We return the actual error so the App sees it!
+        return Response({"status": "error", "message": str(e)}, status=500)
 
 # ==================================================
 # 2. VERIFY OTP EMAIL

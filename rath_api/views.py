@@ -9,7 +9,7 @@ from django.conf import settings
 import json
 import math
 import random 
-import threading # <--- 🚀 NEW UPDATE: Essential for Background Emails
+import threading 
 
 # --- IMPORTS FOR API ---
 from rest_framework.decorators import api_view, permission_classes, parser_classes
@@ -99,8 +99,13 @@ def send_otp_email(request):
         
     except Exception as e:
         print(f"❌ SMTP ERROR: {str(e)}")
-        # IMPORTANT: We return the actual error so the App sees it!
-        return Response({"status": "error", "message": str(e)}, status=500)
+        # 🟢 CRITICAL FIX: Return 'success' (200) even if email fails.
+        # This allows the App to proceed to the Verify Screen because the OTP is already in the DB.
+        return Response({
+            "status": "success", 
+            "message": "OTP Generated (Email Network Error)", 
+            "debug_info": str(e)
+        }, status=200)
 
 # ==================================================
 # 2. VERIFY OTP EMAIL
@@ -490,4 +495,3 @@ def get_trip_passengers(request):
         return JsonResponse({"status": "success", "passengers": passengers})
     except Trip.DoesNotExist:
         return JsonResponse({"status": "error", "message": "Trip not found or unauthorized"}, status=404)
-
